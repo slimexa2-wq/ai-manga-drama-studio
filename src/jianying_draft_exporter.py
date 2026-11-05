@@ -63,7 +63,8 @@ def export_jianying_draft(storyboard: Dict[str, Any], draft_dir: str) -> Dict[st
         dur_us = shot["duration_ms"] * 1000
 
         shot_img_path = os.path.join(assets_dir, f"{shot['shot_id']}.png")
-        shot_aud_path = os.path.join(assets_dir, f"{shot['shot_id']}.mp3")
+        shot_aud_path = shot.get("audio_path", os.path.join(assets_dir, f"{shot['shot_id']}.mp3"))
+        audio_name = os.path.basename(shot_aud_path)
 
         materials_videos.append({
             "id": vid_id,
@@ -95,7 +96,7 @@ def export_jianying_draft(storyboard: Dict[str, Any], draft_dir: str) -> Dict[st
             "id": aud_id,
             "type": "extract_music",
             "path": shot_aud_path,
-            "name": f"{shot['shot_id']}_{shot['speaker']}_tts.mp3",
+            "name": audio_name,
             "duration": dur_us,
         })
 
