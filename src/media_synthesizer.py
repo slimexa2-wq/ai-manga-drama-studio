@@ -13,6 +13,8 @@ from typing import Dict, Any, List, Tuple
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
+from .subtitle_burner import burn_subtitles
+
 FFMPEG_BIN = shutil.which("ffmpeg") or "/Users/wangmini/.local/bin/ffmpeg"
 
 FONT_CANDIDATES = [
@@ -196,7 +198,7 @@ def render_manga_keyframe_png(shot: Dict[str, Any], storyboard: Dict[str, Any], 
     return out_png
 
 
-def render_shot_mp4(shot: Dict[str, Any], img_path: str, audio_path: str, out_mp4: str) -> str:
+def render_shot_mp4(shot: Dict[str, Any], img_path: str, audio_path: str, out_mp4: str, ass_path: str = None) -> str:
     """
     Combine the 1080x1920 keyframe PNG + spoken voiceover WAV into a playable 9:16 MP4 clip.
     Uses ultra-fast ffmpeg encoding so an entire episode renders in ~2 seconds.
@@ -213,9 +215,18 @@ def render_shot_mp4(shot: Dict[str, Any], img_path: str, audio_path: str, out_mp
             "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "128k",
             "-t", f"{dur_sec:.2f}",
-            "-shortest",
-            out_mp4,
+            "-shortest"
         ]
+
+        if ass_path and os.path.exists(ass_path):
+            ass_path_str = ass_path.replace('\\', '/')
+            try:
+                vf_idx = cmd.index("-vf")
+                cmd[vf_idx + 1] += f",ass='{ass_path_str}'"
+            except ValueError:
+                cmd.extend(["-vf", f"ass='{ass_path_str}'"])
+
+        cmd.append(out_mp4)
         res = subprocess.run(cmd, capture_output=True, timeout=25)
         if res.returncode == 0 and os.path.exists(out_mp4):
             return out_mp4
@@ -268,12 +279,21 @@ def synthesize_episode_media(storyboard: Dict[str, Any], assets_dir: str, output
         png_path = os.path.join(assets_dir, f"{sid}.png")
         mp4_path = os.path.join(assets_dir, f"{sid}.mp4")
         aud_path = shot.get("audio_path") or os.path.join(assets_dir, f"{sid}_tts.wav")
+        ass_path = os.path.join(assets_dir, f"{sid}.ass")
+
+        # Generate subtitles ASS file
+        subtitle_text = shot.get("subtitle_text", "")
+        duration_sec = shot.get("duration_sec", 3.5)
+        if subtitle_text:
+            burn_subtitles(subtitle_text, duration_sec, ass_path, fmt='ass')
+        else:
+            ass_path = None
 
         render_manga_keyframe_png(shot, storyboard, png_path)
         shot["image_path"] = png_path
 
         if os.environ.get("MANGA_SKIP_MP4") != "1":
-            render_shot_mp4(shot, png_path, aud_path, mp4_path)
+            render_shot_mp4(shot, png_path, aud_path, mp4_path, ass_path=ass_path)
             if os.path.exists(mp4_path):
                 shot["video_path"] = mp4_path
                 shot_mp4s.append(mp4_path)
