@@ -12,8 +12,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs
 from .style_presets import STYLE_PRESETS
 from .storyboard_engine import build_storyboard
-from .jianying_draft_exporter import export_full_bundle
-from .batch_episode_splitter import split_long_novel_into_episodes
+from .studio_packager import package_project
 
 DEFAULT_OUTPUT_ROOT = os.path.expanduser("~/Downloads/AI漫剧工程输出")
 
@@ -112,43 +111,15 @@ async function generateNow() {{
   window.previousResultHtml = box.innerHTML; // Save previous state for undo
   box.style.display = 'block';
 
-  let allEpisodesHtml = '';
-  if (window.previousResultHtml) {{
-    allEpisodesHtml += `<button class="big-btn" style="margin-bottom: 15px; background: #3b82f6;" onclick="undoGeneration()">↩️ 撤销 (Undo)</button>`;
-  }}
-
-  data.episodes.forEach((ep, idx) => {{
-    const sb = ep.storyboard;
-    let shotsHtml = sb.shots.map(s => `
-      <div class="shot-item">
-        <div><strong>${{s.shot_id}} (${{s.duration_sec}}s) · ${{s.emotion}} · ${{s.shot_type}}</strong></div>
-        <div style="margin:6px 0;color:#cbd5e1;">剧情：${{s.narrative_beat}} | <span style="color:#fde047;">台词(${{s.speaker}})：“${{s.subtitle_text}}”</span></div>
-        <div class="prompt-row">
-          <div class="pbox"><button onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent);this.textContent='✅已复制'">复制 ChatGPT 词</button><div style="display:none">${{s.chatgpt_plus_image_prompt}}</div><strong>🎨 ChatGPT (GPT-Image-2)</strong><br/>${{s.chatgpt_plus_image_prompt.slice(0,110)}}...</div>
-          <div class="pbox"><button onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent);this.textContent='✅已复制'">复制 Flow 词</button><div style="display:none">${{s.google_ultra_flow_image_prompt}}</div><strong>✨ Google Flow (Imagen 4)</strong><br/>${{s.google_ultra_flow_image_prompt.slice(0,110)}}...</div>
-          <div class="pbox"><button onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent);this.textContent='✅已复制'">复制 Veo 3 词</button><div style="display:none">${{s.google_ultra_veo3_video_prompt}}</div><strong>🎞️ Google Veo 3 运镜</strong><br/>${{s.google_ultra_veo3_video_prompt.slice(0,110)}}...</div>
-        </div>
-      </div>
-    `).join('');
-
-    allEpisodesHtml += `
-      <div class="success-banner">
-        <strong>✅ 第 ${{idx + 1}} 集：已一键生成全套漫剧工程包！（共 ${{sb.total_shots}} 镜，总时长 ${{sb.total_duration_sec}} 秒）</strong><br/>
-        <div style="margin-top: 8px; color: #10b981;">
-          <strong>🎣 黄金前3秒钩子:</strong> ${{ep.golden_3s_hook || '无'}}<br/>
-          <strong>崖 断章悬念 (Cliffhanger):</strong> ${{ep.cliffhanger || '无'}}<br/>
-          <strong>💥 爽点节拍:</strong> ${{ep.satisfying_beats.length > 0 ? ep.satisfying_beats.length + ' 处' : '无'}}
-        </div>
-        <div style="margin-top: 8px;">
-          📂 工程目录：<code>${{ep.paths.output_dir}}</code><br/>
-          🎬 剪映专业版草稿：<code>${{ep.paths.draft_content_json}}</code> | 📝 字幕文件：<code>${{ep.paths.subtitles_srt}}</code> | 🌐 独立交互看板：<code>${{ep.paths.preview_html}}</code>
-        </div>
-      </div>
-      ${{shotsHtml}}
-    `;
-  }});
-
-  box.innerHTML = allEpisodesHtml;
+  box.innerHTML = `
+    <div class="success-banner">
+      <strong>✅ 已一键生成全套漫剧工程包！（共 ${{sb.total_shots}} 镜，总时长 ${{sb.total_duration_sec}} 秒）</strong><br/>
+      📂 工程目录：<code>${{data.paths.output_dir}}</code><br/>
+      🎬 剪映专业版草稿：<code>${{data.paths.draft_content_json}}</code> | 📝 字幕文件：<code>${{data.paths.subtitles_srt}}</code> | 🌐 独立交互看板：<code>${{data.paths.preview_html}}</code><br/>
+      🎨 8大画风全景对比：<code>${{data.paths.style_comparison_html}}</code> | 📦 一键免安装打包ZIP：<code>${{data.paths.zip_package}}</code>
+    </div>
+    ${{shotsHtml}}
+  `;
 }}
 </script>
 </body>
@@ -172,28 +143,9 @@ class StudioHandler(BaseHTTPRequestHandler):
             base_title = body.get("title") or "未命名漫剧"
             style_id = body.get("style_id") or "xianxia"
             text = body.get("text") or SAMPLE_SCRIPT
-
-            # Use batch_episode_splitter
-            episodes_data = split_long_novel_into_episodes(text)
-
-            results = []
-            for i, ep_data in enumerate(episodes_data):
-                ep_text = ep_data["text"]
-                # Append episode number if there are multiple episodes
-                title = f"{base_title}_第{i+1}集" if len(episodes_data) > 1 else base_title
-                sb = build_storyboard(ep_text, title=title, style_id=style_id)
-                safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in title)[:30]
-                out_dir = os.path.join(DEFAULT_OUTPUT_ROOT, safe_name)
-                paths = export_full_bundle(sb, out_dir)
-
-                results.append({
-                    "storyboard": sb,
-                    "paths": paths,
-                    "golden_3s_hook": ep_data["golden_3s_hook"],
-                    "cliffhanger": ep_data["cliffhanger"],
-                    "satisfying_beats": ep_data["satisfying_beats"]
-                })
-
+            safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in title)[:30]
+            out_dir = os.path.join(DEFAULT_OUTPUT_ROOT, safe_name)
+            paths, sb = package_project(text, title=title, style_id=style_id, output_dir=out_dir)
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
@@ -229,8 +181,7 @@ def main():
         title = getattr(args, "title", "第一集_魔帝归来")
         style = getattr(args, "style", "xianxia")
         out_dir = getattr(args, "out", None) or os.path.join(DEFAULT_OUTPUT_ROOT, title)
-        sb = build_storyboard(raw_text, title=title, style_id=style)
-        paths = export_full_bundle(sb, out_dir)
+        paths, sb = package_project(raw_text, title=title, style_id=style, output_dir=out_dir)
         print(json.dumps({"ok": True, "total_shots": sb["total_shots"], "total_duration_sec": sb["total_duration_sec"], "paths": paths}, ensure_ascii=False, indent=2))
 
 
