@@ -58,6 +58,16 @@ def render_studio_home_html() -> str:
   .video-card video {{ width: 100%; max-height: 540px; border-radius: 10px; background: #000; }}
   .shot-item {{ background: #0b1120; border: 1px solid #1e293b; border-radius: 12px; padding: 14px; margin-bottom: 12px; display: grid; grid-template-columns: 120px 1fr; gap: 14px; align-items: center; }}
   .shot-thumb {{ width: 120px; height: 213px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }}
+  .big-btn:disabled {{ opacity: .65; cursor: wait; transform: none; }}
+  .error-banner {{ background: rgba(220,38,38,.12); border: 1px solid #ef4444; border-radius: 12px; padding: 16px; color: #fecaca; margin-top: 14px; }}
+  @media (max-width: 720px) {{
+    body {{ padding: 16px; }}
+    .row, .stage-grid {{ grid-template-columns: minmax(0, 1fr); }}
+    .video-card {{ position: static; }}
+    .shot-item {{ grid-template-columns: 88px minmax(0, 1fr); }}
+    .shot-thumb {{ width: 88px; height: 156px; }}
+    .shot-item audio {{ max-width: 100%; }}
+  }}
 </style>
 </head>
 <body>
@@ -85,7 +95,8 @@ def render_studio_home_html() -> str:
     <button class="big-btn" onclick="generateNow()">⚡ 一键全自动生成有声漫剧成片 + 剪映工程包（无需手工复制）</button>
   </div>
 
-  <div id="result" class="panel"></div>
+  <div id="generation-error" class="error-banner" role="alert" hidden></div>
+  <div id="result" class="panel" aria-live="polite"></div>
 </div>
 
 <script>
@@ -113,7 +124,13 @@ async function dispatchCloudEcosystem() {{
 
 async function generateNow() {{
   const btn = document.querySelector('.big-btn');
+  if (btn.disabled) return;
+  const originalText = btn.textContent;
+  const errorBox = document.getElementById('generation-error');
+  errorBox.hidden = true;
+  btn.disabled = true;
   btn.textContent = '⏳ 正在后台全自动拆解分镜、合成多角色语音、渲染 9:16 竖屏成片与剪映工程...';
+  try {{
   const res = await fetch('/api/generate', {{
     method: 'POST',
     headers: {{'Content-Type': 'application/json'}},
@@ -123,8 +140,9 @@ async function generateNow() {{
       text: document.getElementById('script_text').value
     }})
   }});
+  if (!res.ok) throw new Error('服务器返回 ' + res.status);
   const data = await res.json();
-  btn.textContent = '⚡ 一键全自动生成有声漫剧成片 + 剪映工程包（无需手工复制）';
+  if (data.error || data.ok === false) throw new Error(data.error || '生成失败');
   const box = document.getElementById('result');
   window.previousResultHtml = box.innerHTML;
   box.style.display = 'block';
@@ -176,6 +194,13 @@ async function generateNow() {{
       </div>
     </div>
   `;
+  }} catch (error) {{
+    errorBox.textContent = '生成失败：' + (error.message || '请检查服务连接后重试');
+    errorBox.hidden = false;
+  }} finally {{
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }}
 }}
 </script>
 </body>
@@ -320,3 +345,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
