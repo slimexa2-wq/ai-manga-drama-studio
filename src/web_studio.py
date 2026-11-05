@@ -251,12 +251,18 @@ class StudioHandler(BaseHTTPRequestHandler):
             out_dir = body.get("output_dir") or ""
             sb_json = os.path.join(out_dir, "storyboard.json")
             runner = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "ego_dual_ecosystem_runner.mjs")
-            if os.path.exists(sb_json) and os.path.exists(runner):
-                subprocess.Popen(
-                    ["/Applications/ego lite.app/Contents/MacOS/ego-browser", "nodejs", runner, sb_json],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
+            ego_bin = "/Users/wangmini/.local/bin/ego-browser"
+            if os.path.exists(sb_json) and os.path.exists(runner) and os.path.exists(ego_bin):
+                env = os.environ.copy()
+                env["MANGA_STORYBOARD_JSON"] = sb_json
+                with open(runner, "rb") as rf:
+                    subprocess.Popen(
+                        [ego_bin, "nodejs"],
+                        stdin=rf,
+                        env=env,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()
