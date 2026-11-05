@@ -11,6 +11,8 @@ import html
 from typing import Dict, Any
 
 from .jianying_effects_enricher import enrich_draft_content
+from .tts_synthesizer import process_storyboard
+from .media_synthesizer import synthesize_episode_media
 
 
 def _ms_to_srt_time(ms: int) -> str:
@@ -321,12 +323,20 @@ function copyText(btn) {{
 
 
 def export_full_bundle(storyboard: Dict[str, Any], output_dir: str) -> Dict[str, str]:
-    """Export JSON storyboard, SRT subtitles, JianyingPro draft, and Interactive HTML."""
+    """Export real TTS audio, 1080x1920 keyframes, episode MP4, JSON storyboard, SRT subtitles, JianyingPro draft, and Interactive HTML."""
     os.makedirs(output_dir, exist_ok=True)
     json_path = os.path.join(output_dir, "storyboard.json")
     srt_path = os.path.join(output_dir, "subtitles.srt")
     html_path = os.path.join(output_dir, "storyboard_preview.html")
     draft_dir = os.path.join(output_dir, "jianying_draft")
+    assets_dir = os.path.join(draft_dir, "assets")
+    os.makedirs(assets_dir, exist_ok=True)
+
+    # 1. Generate real spoken multi-role voiceover audio & align timeline durations
+    process_storyboard(storyboard, assets_dir)
+
+    # 2. Render 1080x1920 9:16 vertical manga keyframes, per-shot MP4s, and master episode_final.mp4
+    media_info = synthesize_episode_media(storyboard, assets_dir, output_dir)
 
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(storyboard, f, ensure_ascii=False, indent=2)
@@ -342,4 +352,5 @@ def export_full_bundle(storyboard: Dict[str, Any], output_dir: str) -> Dict[str,
         "preview_html": html_path,
         "jianying_draft_dir": draft_dir,
         "draft_content_json": draft_paths["draft_content"],
+        "episode_mp4": media_info.get("episode_mp4", ""),
     }
