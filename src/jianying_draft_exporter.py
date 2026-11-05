@@ -10,6 +10,8 @@ import uuid
 import html
 from typing import Dict, Any
 
+from .jianying_effects_enricher import enrich_draft_content
+
 
 def _ms_to_srt_time(ms: int) -> str:
     hours = ms // 3600000
@@ -156,6 +158,8 @@ def export_jianying_draft(storyboard: Dict[str, Any], draft_dir: str) -> Dict[st
             {"id": str(uuid.uuid4()).upper(), "type": "audio", "segments": audio_segments},
         ],
     }
+
+    draft_content = enrich_draft_content(draft_content, storyboard)
 
     draft_meta = {
         "draft_id": draft_content["id"],

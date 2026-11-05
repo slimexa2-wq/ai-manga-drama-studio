@@ -24,9 +24,11 @@ class TestMangaStudioPipeline(unittest.TestCase):
             self.assertTrue(os.path.exists(paths["preview_html"]))
             self.assertTrue(os.path.exists(paths["draft_content_json"]))
 
-            draft = json.load(open(paths["draft_content_json"], encoding="utf-8"))
+            with open(paths["draft_content_json"], encoding="utf-8") as f:
+                draft = json.load(f)
             self.assertEqual(draft["canvas_config"]["ratio"], "9:16")
-            self.assertEqual(len(draft["tracks"]), 3)
+            # We now have 4 tracks because of the new BGM track added by enrich_draft_content
+            self.assertEqual(len(draft["tracks"]), 4)
 
 
 if __name__ == "__main__":
