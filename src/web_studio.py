@@ -12,7 +12,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs
 from .style_presets import STYLE_PRESETS
 from .storyboard_engine import build_storyboard
-from .jianying_draft_exporter import export_full_bundle
+from .studio_packager import package_project
 
 DEFAULT_OUTPUT_ROOT = os.path.expanduser("~/Downloads/AI漫剧工程输出")
 
@@ -117,7 +117,8 @@ async function generateNow() {{
     <div class="success-banner">
       <strong>✅ 已一键生成全套漫剧工程包！（共 ${{sb.total_shots}} 镜，总时长 ${{sb.total_duration_sec}} 秒）</strong><br/>
       📂 工程目录：<code>${{data.paths.output_dir}}</code><br/>
-      🎬 剪映专业版草稿：<code>${{data.paths.draft_content_json}}</code> | 📝 字幕文件：<code>${{data.paths.subtitles_srt}}</code> | 🌐 独立交互看板：<code>${{data.paths.preview_html}}</code>
+      🎬 剪映专业版草稿：<code>${{data.paths.draft_content_json}}</code> | 📝 字幕文件：<code>${{data.paths.subtitles_srt}}</code> | 🌐 独立交互看板：<code>${{data.paths.preview_html}}</code><br/>
+      🎨 8大画风全景对比：<code>${{data.paths.style_comparison_html}}</code> | 📦 一键免安装打包ZIP：<code>${{data.paths.zip_package}}</code>
     </div>
     ${{shotsHtml}}
   `;
@@ -144,10 +145,9 @@ class StudioHandler(BaseHTTPRequestHandler):
             title = body.get("title") or "未命名漫剧"
             style_id = body.get("style_id") or "xianxia"
             text = body.get("text") or SAMPLE_SCRIPT
-            sb = build_storyboard(text, title=title, style_id=style_id)
             safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in title)[:30]
             out_dir = os.path.join(DEFAULT_OUTPUT_ROOT, safe_name)
-            paths = export_full_bundle(sb, out_dir)
+            paths, sb = package_project(text, title=title, style_id=style_id, output_dir=out_dir)
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
@@ -183,8 +183,7 @@ def main():
         title = getattr(args, "title", "第一集_魔帝归来")
         style = getattr(args, "style", "xianxia")
         out_dir = getattr(args, "out", None) or os.path.join(DEFAULT_OUTPUT_ROOT, title)
-        sb = build_storyboard(raw_text, title=title, style_id=style)
-        paths = export_full_bundle(sb, out_dir)
+        paths, sb = package_project(raw_text, title=title, style_id=style, output_dir=out_dir)
         print(json.dumps({"ok": True, "total_shots": sb["total_shots"], "total_duration_sec": sb["total_duration_sec"], "paths": paths}, ensure_ascii=False, indent=2))
 
 
